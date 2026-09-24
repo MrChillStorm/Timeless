@@ -4,7 +4,7 @@ A calm, personal timesheet. One week at a time: type the hours, write a
 line about the day, and see at a glance how the week sits against your
 plan and a full week. Nothing to save, nothing to submit.
 
-![Timeless: the week view, with the plan shown faintly in empty days, note dots, an on-call row and progress against plan](docs/screenshot.png)
+![Timeless: the week view, with the plan shown faintly in empty days, note dots, an on-call row, an unplanned meetings project and progress against plan](docs/screenshot.png)
 
 Built with Python, PySide6 (Qt) and SQLite. Everything stays on your
 own computer.
