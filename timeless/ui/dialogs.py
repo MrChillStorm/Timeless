@@ -111,6 +111,8 @@ covers the rest.</p>
     project's plan, and a kind can change billing.</li>
 <li>The bar at the top shows the week against your full week (holidays taken out) and against the plan.
     <b>Of plan</b> turns amber when a project goes over.</li>
+<li>For all-hands, training and other internal time, make a project with no plan. Its hours count toward the
+    week but have no plan to go over; write what it was in the day's note.</li>
 <li><b>Mark week done</b> once it's reported or invoiced: the week becomes read-only until you reopen it.</li>
 </ul>
 

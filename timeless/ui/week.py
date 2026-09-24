@@ -129,6 +129,12 @@ class WeekModel(QAbstractTableModel):
     def planned_total(self) -> float:
         return round(sum(self.project_plan(p) for p in self.projects.values() if not p.archived), 2)
 
+    def unplanned_hours(self) -> float:
+        """Hours outside planned_total: projects with no plan this week, such
+        as internal meetings, and archived ones."""
+        return round(sum(h for (_d, pid, _k), (h, _n) in self.cells.items()
+                         if self.projects[pid].archived or not self.project_plan(self.projects[pid])), 2)
+
     def capacity(self) -> float:
         return week_capacity(self.start, self.full_week)
 
@@ -382,7 +388,9 @@ class WeekModel(QAbstractTableModel):
                 return fmt_percent(hours, plan) if plan else ""
             if role == WARN_ROLE:
                 return bool(plan) and hours > plan + 1e-9
-            if role == TOOLTIP and plan:
+            if role == TOOLTIP:
+                if not plan:
+                    return "No plan this week: these hours count toward the week only."
                 over = f"\nOver plan by {fmt_hours(hours - plan)} h" if hours > plan + 1e-9 else ""
                 return f"{fmt_hours(hours)} h of {fmt_hours(plan)} h planned{over}"
         return None
@@ -417,7 +425,9 @@ class WeekModel(QAbstractTableModel):
             if role == WARN_ROLE:
                 return bool(plan) and self.week_total() > plan + 1e-9
             if role == TOOLTIP and plan:
-                return f"{fmt_hours(self.week_total())} h of {fmt_hours(plan)} h planned for the week"
+                unplanned = self.unplanned_hours()
+                extra = f"\nIncludes {fmt_hours(unplanned)} h on projects with no plan" if unplanned else ""
+                return f"{fmt_hours(self.week_total())} h of {fmt_hours(plan)} h planned for the week{extra}"
         return None
 
     def _split_tip(self, heading: str, day: int | None = None, extra: str | None = None) -> str | None:

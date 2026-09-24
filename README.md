@@ -74,6 +74,14 @@ arrows, by scrolling over the week, or from the calendar under it.
   you. Below it are the billable and non-billable split and the plan
   total. **Of plan** shows each project's progress, and turns amber when
   it goes over.
+- **Not everything needs a plan.** For all-hands, training and other
+  internal time, make a project with no planned hours (and billable
+  off), and write what it was in the day's note. Its hours count toward
+  the day, the week and the billable split, but it has no Of plan of its
+  own, so it can't put a project behind or over. The week's total Of
+  plan counts every hour you entered: a meeting on top of a full plan
+  shows there, and one that took time from a project shows on that
+  project's row.
 - **Mark week done** once it's reported or invoiced. The week becomes
   read-only until you reopen it.
 
