@@ -1,0 +1,21 @@
+#!/bin/bash
+# The executable behind Timeless.app. GUI-launched apps don't get the
+# PATH a Terminal has, so plain 'python3' could find a Python without
+# PySide6; a login shell of the user's own $SHELL gets the real one.
+DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+export DIR
+USER_SHELL="${SHELL:-/bin/bash}"
+
+if ! "$USER_SHELL" -l -c 'python3 -c "import PySide6, platformdirs"' 2>/dev/null; then
+    osascript <<'APPLESCRIPT'
+display dialog "Timeless needs two Python packages first.
+
+In Terminal, in this folder, run:  python3 -m pip install -r requirements.txt
+
+then open the app again." with title "Timeless" buttons {"OK"} default button "OK" with icon caution
+APPLESCRIPT
+    open -a Terminal "$DIR"
+    exit 1
+fi
+
+exec "$USER_SHELL" -l -c 'cd "$DIR" && exec python3 -m timeless'

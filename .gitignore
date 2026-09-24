@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
+# the database lives in ~/Library/Application Support/Timeless;
+# never commit one if TIMELESS_DB points somewhere in here
+*.db
+*.db-journal

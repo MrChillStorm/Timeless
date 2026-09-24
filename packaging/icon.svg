@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8189ff"/>
+      <stop offset="1" stop-color="#4338ca"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS icon grid: 824px rounded square centered in the 1024 canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <!-- hourglass: caps, glass, and the sand that's left -->
+  <path d="M332 262 H692 M332 762 H692" stroke="#fff" stroke-width="52" stroke-linecap="round"/>
+  <path d="M378 262 C378 420 512 448 512 512 C512 576 378 604 378 762
+           M646 262 C646 420 512 448 512 512 C512 576 646 604 646 762"
+        fill="none" stroke="#fff" stroke-width="44" stroke-linejoin="round"/>
+  <path d="M430 718 C452 664 482 640 512 640 C542 640 572 664 594 718 Z" fill="#fff"/>
+</svg>
