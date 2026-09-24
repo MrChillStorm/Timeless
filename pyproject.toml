@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# "timeless" alone is taken on PyPI; the import package and the command are still `timeless`
+name = "timeless-timesheet"
+version = "1.0.0"
+description = "A calm, personal timesheet: one week at a time, saved as you type."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "MrChillStorm" }]
+requires-python = ">=3.10"
+dependencies = ["PySide6>=6.5", "platformdirs"]
+keywords = ["timesheet", "time tracking", "pyside6", "qt"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: MacOS X",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business",
+]
+
+[project.urls]
+Homepage = "https://github.com/MrChillStorm/Timeless"
+
+# `timeless` on the command line runs the same main() as `python3 -m timeless`
+[project.gui-scripts]
+timeless = "timeless.app:main"
+
+[tool.setuptools.packages.find]
+include = ["timeless*"]
+
+[tool.setuptools.package-data]
+"timeless.core" = ["schema.sql"]

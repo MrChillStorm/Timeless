@@ -11,22 +11,34 @@ own computer.
 
 ## Install & run
 
-You need Python 3.10 or newer, then:
+You need Python 3.10 or newer.
+
+**As an app you start with `timeless`**, from anywhere. The easiest way
+is [pipx](https://pipx.pypa.io), which gives Timeless its own
+environment (`brew install pipx` on macOS):
+
+```bash
+pipx install git+https://github.com/MrChillStorm/Timeless.git
+timeless
+```
+
+Plain `pip install` into your own virtual environment works too
+(`pip install git+https://github.com/MrChillStorm/Timeless.git`).
+Homebrew's system Python refuses a plain `pip install`, which is why
+pipx or a venv is the way. The package is called `timeless-timesheet`,
+because `timeless` is already taken on PyPI.
+
+**From a clone**, which is also what `Timeless.app` uses:
 
 ```bash
 git clone https://github.com/MrChillStorm/Timeless.git
 cd Timeless
 python3 -m pip install -r requirements.txt
-```
-
-Double-click **Timeless.app** in this folder, or run:
-
-```bash
 python3 -m timeless
 ```
 
-The app bundle has to stay in this folder, because it starts the code
-next to it. If you downloaded a ZIP instead of cloning and macOS refuses
+Or double-click **Timeless.app** in the folder. The app bundle has to
+stay in this folder, because it starts the code next to it. If you downloaded a ZIP instead of cloning and macOS refuses
 to open the app, right-click it and choose Open once. Timeless is built and used on macOS. It's plain Qt, so
 `python3 -m timeless` should also work on Windows and Linux, where ⌘
 means Ctrl, but only macOS has been tried.
@@ -117,6 +129,7 @@ system.
 ## Development
 
 ```bash
+pip install -e .                     # the `timeless` command, running this checkout
 python3 -m unittest discover tests   # core tests
 python3 packaging/build_icon.py      # rebuild the app icon after editing packaging/icon.svg
 ```
