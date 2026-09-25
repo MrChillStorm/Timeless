@@ -3,7 +3,7 @@ it for special kinds of hours (on-call, travel...). Empty days show the
 plan faintly; everything typed is saved at once and can be undone."""
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
 from PySide6.QtWidgets import (
@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from timeless.core import store
 from timeless.core.calendar import (
     DAY_NAMES, DAY_TITLES, DEFAULT_FULL_WEEK, MAX_HOURS_PER_DAY, fmt_date, fmt_day, fmt_hours, fmt_percent,
-    holiday_tooltip, is_day_off, is_public_holiday, week_capacity, week_days, week_start,
+    fmt_signed, holiday_tooltip, is_day_off, is_public_holiday, week_capacity, week_days, week_label, week_start,
 )
 from timeless.core.db import get_setting
 from timeless.ui import icons
@@ -56,6 +56,7 @@ class Change:
 
 class WeekModel(QAbstractTableModel):
     changed = Signal()  # totals, capacity or done-ness may have moved
+    message = Signal(str)
 
     def __init__(self, conn, parent=None):
         super().__init__(parent)
@@ -68,6 +69,9 @@ class WeekModel(QAbstractTableModel):
         self.kinds: list[store.Kind] = []
         self.done = False
         self.full_week = DEFAULT_FULL_WEEK
+        self.full_day = DEFAULT_FULL_WEEK / 5
+        self.flex_on = False
+        self.flex_before = 0.0  # the flex balance when the week starts
         self._extra: set[tuple[int, int]] = set()  # kind rows added this week, still empty
         self._undo: list[list[Change]] = []
         self._redo: list[list[Change]] = []
@@ -87,6 +91,10 @@ class WeekModel(QAbstractTableModel):
         self.kinds = store.list_kinds(self.conn)
         self.cells = store.week_cells(self.conn, self.days)
         self.done = store.is_done(self.conn, self.start)
+        self.flex_on = store.flex_enabled(self.conn)
+        if self.flex_on:
+            earned, spent = store.flex_between(self.conn, None, self.start - timedelta(days=1))
+            self.flex_before = round(store.flex_start(self.conn) + earned - spent, 2)
         used = {(pid, kid) for _day, pid, kid in self.cells}
         self.rows = []
         for p in projects:
@@ -154,6 +162,48 @@ class WeekModel(QAbstractTableModel):
                 non_billable += h
         return round(billable, 2), round(non_billable, 2)
 
+    def _flex_kinds(self) -> set[int]:
+        return {k.id for k in self.kinds if k.flex}
+
+    def flex_week(self) -> tuple[float, float]:
+        """(earned, used) this week: hours on flex rows, and on flex time off."""
+        flex_kinds = self._flex_kinds()
+        earned = sum(h for (_d, _p, kid), (h, _n) in self.cells.items() if kid in flex_kinds)
+        used = sum(h for (_d, pid, _k), (h, _n) in self.cells.items() if self.projects[pid].flex)
+        return round(earned, 2), round(used, 2)
+
+    def flex_balance(self) -> float:
+        """The flex balance at the end of the week."""
+        earned, used = self.flex_week()
+        return round(self.flex_before + earned - used, 2)
+
+    def day_length(self, day: int) -> float:
+        """The normal day flex hours go on top of: none on a day off."""
+        return 0.0 if is_day_off(self.days[day]) else self.full_day
+
+    def work_hours(self, day: int) -> float:
+        """A day's hours besides flex rows and flex time off."""
+        flex_kinds = self._flex_kinds()
+        return round(sum(h for (d, pid, kid), (h, _n) in self.cells.items()
+                         if d == self.days[day] and kid not in flex_kinds and not self.projects[pid].flex), 2)
+
+    def flex_short(self, day: int) -> bool:
+        """The day doesn't have a full day of other work yet."""
+        return self.work_hours(day) + 1e-9 < self.day_length(day)
+
+    def _flex_refused(self, key: store.Key, hours: float, before: float) -> bool:
+        """More flex hours on a day that isn't full yet are refused, with a
+        message. Fewer are always fine."""
+        day, _pid, kid = key
+        if not self.flex_on or hours <= before or kid not in self._flex_kinds():
+            return False
+        i = self.days.index(day)
+        if not self.flex_short(i):
+            return False
+        self.message.emit(f"Flex hours go on top of a full day: {DAY_TITLES[i]} has {fmt_hours(self.work_hours(i))} h "
+                          f"of other work, and a day is {fmt_hours(self.day_length(i))} h.")
+        return True
+
     def row_of(self, project_id: int, kind_id: int | None = None) -> int:
         return next((i for i, r in enumerate(self.rows) if r.project.id == project_id and r.kind_id == kind_id), -1)
 
@@ -169,6 +219,8 @@ class WeekModel(QAbstractTableModel):
         for key, hours, note in changes:
             before = self.cells.get(key, (0.0, ""))
             after = (before[0] if hours is None else round(hours, 2), before[1] if note is None else note.strip())
+            if self._flex_refused(key, after[0], before[0]):
+                continue
             if after != before:
                 group.append(Change(key, before, after))
         if group:
@@ -223,6 +275,8 @@ class WeekModel(QAbstractTableModel):
         if self.done or day is None or index.row() >= len(self.rows):
             return False
         key = self.key(index.row(), day)
+        if self._flex_refused(key, round(hours, 2), self.cells.get(key, (0.0, ""))[0]):
+            return False
         now = time.monotonic()
         last = self._nudging
         top = self._undo[-1] if self._undo else None
@@ -356,7 +410,9 @@ class WeekModel(QAbstractTableModel):
             if role == TOOLTIP:
                 if row.kind:
                     billing = store.BILLING[row.kind.billing].lower()
-                    return f"{row.kind.name} hours on {row.project.name} ({billing}).\nThey count toward its plan."
+                    flex = "\nThey go into your flex balance." if row.kind.flex and self.flex_on else ""
+                    return (f"{row.kind.name} hours on {row.project.name} ({billing}).\nThey count toward its plan."
+                            + flex)
                 return (row.project.details() + "\n\nSelect the name to edit the project's notes below; "
                         "double-click to edit the project, right-click for more.")
             return None
@@ -368,6 +424,9 @@ class WeekModel(QAbstractTableModel):
                 return hours
             if role == NOTE_ROLE:
                 return bool(note)
+            flex_row = self.flex_on and row.kind is not None and row.kind.flex
+            if role == WARN_ROLE:
+                return flex_row and bool(hours) and self.flex_short(day)
             planned = self.planned(r, day)
             if role == GHOST_ROLE and not hours and planned and not self.done:
                 return fmt_hours(planned)
@@ -375,6 +434,10 @@ class WeekModel(QAbstractTableModel):
                 tip = note
                 if not hours and planned and not self.done:
                     tip = (tip + "\n\n" if tip else "") + f"Planned {fmt_hours(planned)} h. Press = to use it."
+                if flex_row and self.flex_short(day):
+                    tip = (tip + "\n\n" if tip else "") + (
+                        f"Flex hours go on top of a full day: this day has {fmt_hours(self.work_hours(day))} h of "
+                        f"other work, and a day is {fmt_hours(self.day_length(day))} h.")
                 return tip or None
             return None
         if c == C.WEEK and role == DISPLAY:
@@ -462,6 +525,7 @@ class WeekPage(QWidget):
         layout.addWidget(self._build_note_bar())
         self.model.changed.connect(self._refresh_summary)
         self.model.modelReset.connect(self._after_reset)
+        self.model.message.connect(self.message.emit)
 
     # ---- layout -------------------------------------------------------------
 
@@ -490,6 +554,18 @@ class WeekPage(QWidget):
         bar_box.addWidget(self.split_label)
         bar_box.addStretch(1)
         row.addLayout(bar_box, 1)
+        self.flex_box = QWidget()
+        flex = QVBoxLayout(self.flex_box)
+        flex.setContentsMargins(4, 0, 4, 0)
+        flex.setSpacing(0)
+        self.flex_value = QLabel()
+        self.flex_value.setObjectName("flex")
+        caption = QLabel("flex balance")
+        caption.setObjectName("muted")
+        for label in (self.flex_value, caption):
+            label.setAlignment(Qt.AlignmentFlag.AlignRight)
+            flex.addWidget(label)
+        row.addWidget(self.flex_box)
         self.fill_btn = QPushButton("Fill from plan")
         self.fill_btn.setToolTip("Put the planned hours into every empty day of this week. ⌘Z undoes it.")
         self.done_btn = QPushButton()
@@ -525,12 +601,11 @@ class WeekPage(QWidget):
         footer.setContentsMargins(8, 6, 12, 8)
         self.new_btn = link_button("＋  New project", "Add a project -- it becomes a row of every week")
         self.new_btn.clicked.connect(self.newProjectRequested.emit)
-        hint = QLabel("Type or scroll hours  ·  Enter for a note  ·  = takes the plan  ·  right-click for "
-                      "on-call or travel")
-        hint.setObjectName("faint")
+        self.hint = QLabel()
+        self.hint.setObjectName("faint")
         footer.addWidget(self.new_btn)
         footer.addStretch(1)
-        footer.addWidget(hint)
+        footer.addWidget(self.hint)
         grid_layout.addLayout(footer)
 
         empty = QWidget()
@@ -574,10 +649,13 @@ class WeekPage(QWidget):
         self.view.commit_editor()
         self._commit_note()
         self.model.full_week = float(get_setting(self.conn, "full_week", str(DEFAULT_FULL_WEEK)))
+        self.model.full_day = store.full_day(self.conn)
         self.model.load(start)
 
     def _after_reset(self) -> None:
         self.stack.setCurrentIndex(0 if self.model.rows else 1)
+        extras = "flex, on-call or travel" if self.model.flex_on else "on-call or travel"
+        self.hint.setText(f"Type or scroll hours  ·  Enter for a note  ·  = takes the plan  ·  right-click for {extras}")
         self._show_note()
 
     def _refresh_summary(self) -> None:
@@ -594,6 +672,12 @@ class WeekPage(QWidget):
         plan_text = f"   ·   plan {fmt_hours(planned)} h" if planned else ""
         self.split_label.setText(f"Billable {fmt_hours(billable)} h   ·   non-billable {fmt_hours(non_billable)} h"
                                  + plan_text)
+        self.flex_box.setVisible(m.flex_on)
+        if m.flex_on:
+            balance = m.flex_balance()
+            self.flex_value.setText(f"{fmt_signed(balance)} h")
+            self.flex_value.setStyleSheet(f"color: {c['warning']};" if balance < 0 else "")
+            self.flex_box.setToolTip(self._flex_tip(balance))
         self.fill_btn.setEnabled(not m.done and bool(m.rows))
         self.done_btn.setChecked(m.done)
         self.done_btn.setText("Done  ·  reopen" if m.done else "Mark week done")
@@ -605,6 +689,18 @@ class WeekPage(QWidget):
         self.done_btn.style().polish(self.done_btn)
         self.notes.refresh_icon()
         self._show_note()
+
+    def _flex_tip(self, balance: float) -> str:
+        m = self.model
+        earned, used = m.flex_week()
+        week = week_label(m.start)
+        kinds = " / ".join(k.name for k in m.kinds if k.flex) or "a flex"
+        time_off = " / ".join(p.name for p in m.projects.values() if p.flex and not p.archived) or "flex time off"
+        return (f"Flex balance at the end of {week[0].lower() + week[1:]}: {fmt_signed(balance)} h\n\n"
+                f"Before this week: {fmt_signed(m.flex_before)} h\n"
+                f"This week: {fmt_hours(earned)} h earned, {fmt_hours(used)} h taken off\n\n"
+                f"Extra hours go on a {kinds} row under the project (right-click it).\n"
+                f"Time taken off goes on {time_off}. The starting balance is in Settings.")
 
     def _toggle_done(self) -> None:
         self.view.commit_editor()
@@ -706,7 +802,7 @@ class WeekPage(QWidget):
         row = self.model.rows[r]
         menu = QMenu(self)
         if not self.model.done:
-            if row.kind is None:
+            if row.kind is None and not row.project.flex:
                 add = menu.addMenu(f"Add a row under {row.project.name}")
                 present = {x.kind_id for x in self.model.rows if x.project.id == row.project.id}
                 for k in self.model.kinds:
@@ -715,8 +811,8 @@ class WeekPage(QWidget):
                 if add.actions():
                     add.addSeparator()
                 add.addAction("New kind…", self.kindsRequested.emit)
-                if self.model.project_plan(row.project):
-                    menu.addAction("Fill from plan", lambda: self._fill_row(r))
+            if row.kind is None and self.model.project_plan(row.project):
+                menu.addAction("Fill from plan", lambda: self._fill_row(r))
             if self.model.row_total(r):
                 menu.addAction("Clear this week's hours", lambda: self._clear_row(r))
             menu.addSeparator()

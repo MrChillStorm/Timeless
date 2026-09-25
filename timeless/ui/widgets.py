@@ -68,10 +68,10 @@ class WheelSteps:
 class HoursSpin(QDoubleSpinBox):
     """Hours in Finnish format (7,50) that also accepts a typed '.'."""
 
-    def __init__(self, maximum: float = 24):
+    def __init__(self, maximum: float = 24, minimum: float = 0):
         super().__init__()
         self.setLocale(FINNISH)
-        self.setRange(0, maximum)
+        self.setRange(minimum, maximum)
         self.setDecimals(2)
         self.setSingleStep(0.5)
         self.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)

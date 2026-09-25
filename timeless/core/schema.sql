@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS projects (
     plan_sun REAL NOT NULL DEFAULT 0,
     notes TEXT NOT NULL DEFAULT '',
     archived INTEGER NOT NULL DEFAULT 0,
+    flex INTEGER NOT NULL DEFAULT 0,        -- flex time off: its hours take from the flex balance
     created_at TEXT NOT NULL
 );
 
@@ -31,6 +32,7 @@ CREATE TABLE IF NOT EXISTS kinds (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     billing TEXT NOT NULL DEFAULT 'project' CHECK (billing IN ('project', 'billable', 'non_billable')),
+    flex INTEGER NOT NULL DEFAULT 0,        -- extra hours: they go into the flex balance
     created_at TEXT NOT NULL
 );
 
@@ -54,7 +56,8 @@ CREATE TABLE IF NOT EXISTS done_weeks (
     done_at TEXT NOT NULL
 );
 
--- Your name, full week, appearance, remembered choices.
+-- Your name, full week, appearance, flex hours (on or off, and the
+-- starting balance), remembered choices.
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT

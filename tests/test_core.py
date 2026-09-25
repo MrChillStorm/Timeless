@@ -1,5 +1,6 @@
 """Core tests: python3 -m unittest discover tests"""
 import csv
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from timeless.core import db, report, store
 from timeless.core.calendar import (
-    fmt_hours, fmt_percent, holiday_name, is_day_off, is_public_holiday, iso_week, parse_hours, step_half_hours,
+    fmt_hours, fmt_percent, fmt_signed, holiday_name, is_day_off, is_public_holiday, iso_week, parse_hours, step_half_hours,
     week_capacity, week_days, week_label, week_range, week_start,
 )
 
@@ -37,6 +38,7 @@ class CalendarTest(unittest.TestCase):
         self.assertEqual(fmt_percent(20.5, 39.5), "52 %")
         self.assertEqual(fmt_percent(0.1, 40), "<1 %")
         self.assertEqual(fmt_percent(3, 0), "")
+        self.assertEqual((fmt_signed(3.5), fmt_signed(-2), fmt_signed(0.001)), ("+3,50", "−2,00", "0,00"))
 
     def test_half_hour_steps(self):
         self.assertEqual(step_half_hours(7.5, 1), 8.0)
@@ -115,6 +117,73 @@ class StoreTest(StoreCase):
         self.assertTrue(store.is_done(self.conn, MON))
         store.set_done(self.conn, MON, False)
         self.assertFalse(store.is_done(self.conn, MON))
+
+
+class FlexTest(StoreCase):
+    def test_turning_flex_on_and_off(self):
+        self.assertFalse(store.flex_enabled(self.conn))
+        store.set_flex(self.conn, True)
+        self.assertTrue(store.flex_enabled(self.conn))
+        [kind] = [k for k in store.list_kinds(self.conn) if k.flex]
+        [off] = [p for p in store.list_projects(self.conn) if p.flex]
+        self.assertEqual((kind.name, kind.billing, off.name, off.billable), ("Flex", "project", "Flex time off", False))
+        store.set_flex(self.conn, True)  # twice changes nothing
+        self.assertEqual(len(store.list_kinds(self.conn)), 1)
+        store.set_flex(self.conn, False)  # never used: both go
+        self.assertEqual((store.list_kinds(self.conn), store.list_projects(self.conn, include_archived=True)), ([], []))
+
+    def test_used_flex_is_kept(self):
+        store.set_flex(self.conn, True)
+        off = next(p for p in store.list_projects(self.conn) if p.flex)
+        store.set_cell(self.conn, (MON, off.id, None), 2, "")
+        store.set_flex(self.conn, False)
+        [kept] = store.list_projects(self.conn, include_archived=True)
+        self.assertTrue(kept.archived and kept.flex)
+        store.set_flex(self.conn, True)  # back again, with its history
+        self.assertEqual([p.id for p in store.list_projects(self.conn)], [off.id])
+
+    def test_takes_over_existing_names(self):
+        own = self.project("flex time off")
+        store.save_kind(self.conn, store.Kind(name="FLEX", billing="billable"))
+        store.set_flex(self.conn, True)
+        self.assertEqual([p.id for p in store.list_projects(self.conn) if p.flex], [own.id])
+        self.assertEqual([(k.name, k.billing, k.flex) for k in store.list_kinds(self.conn)], [("FLEX", "billable", True)])
+
+    def test_balance(self):
+        store.set_flex(self.conn, True)
+        db.set_setting(self.conn, "flex_start", "-1.5")
+        work = self.project("Alpha")
+        flex = next(k for k in store.list_kinds(self.conn) if k.flex)
+        off = next(p for p in store.list_projects(self.conn) if p.flex)
+        oncall = store.Kind(name="On-call")
+        store.save_kind(self.conn, oncall)
+        store.set_cell(self.conn, (date(2026, 9, 14), work.id, flex.id), 2, "")
+        store.set_cell(self.conn, (MON, work.id, flex.id), 1.5, "")
+        store.set_cell(self.conn, (MON, work.id, oncall.id), 3, "")    # other kinds don't count
+        store.set_cell(self.conn, (MON, work.id, None), 7.5, "")
+        store.set_cell(self.conn, (date(2026, 9, 25), off.id, None), 4, "")
+        self.assertEqual(store.flex_between(self.conn, None, MON - date.resolution), (2, 0))
+        self.assertEqual(store.flex_between(self.conn, MON, date(2026, 9, 27)), (1.5, 4))
+        earned, used = store.flex_between(self.conn, None, date(2026, 9, 27))
+        self.assertEqual(store.flex_start(self.conn) + earned - used, -2.0)
+
+    def test_older_database_gets_the_flex_columns(self):
+        path = Path(self.tmp.name) / "old.db"
+        old = sqlite3.connect(path)
+        old.executescript("CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL, code TEXT NOT NULL DEFAULT '', "
+                          "client TEXT NOT NULL DEFAULT '', billable INTEGER NOT NULL DEFAULT 1, "
+                          + "".join(f"{c} REAL NOT NULL DEFAULT 0, " for c in store.PLAN_COLUMNS)
+                          + "notes TEXT NOT NULL DEFAULT '', archived INTEGER NOT NULL DEFAULT 0, "
+                          "created_at TEXT NOT NULL);"
+                          "CREATE TABLE kinds (id INTEGER PRIMARY KEY, name TEXT NOT NULL, "
+                          "billing TEXT NOT NULL DEFAULT 'project', created_at TEXT NOT NULL);"
+                          "INSERT INTO projects (name, created_at) VALUES ('Alpha', 'x');"
+                          "INSERT INTO kinds (name, created_at) VALUES ('On-call', 'x');")
+        old.close()
+        conn = db.connect(path)
+        self.assertFalse(store.list_projects(conn)[0].flex)
+        self.assertFalse(store.list_kinds(conn)[0].flex)
+        conn.close()
 
 
 class ReportTest(StoreCase):

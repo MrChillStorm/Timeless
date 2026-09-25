@@ -61,6 +61,12 @@ def fmt_hours(hours: float, blank_zero: bool = False) -> str:
     return f"{hours:.2f}".replace(".", ",")
 
 
+def fmt_signed(hours: float) -> str:
+    """Hours with a sign, for balances: +3,50 / −2,00 (a real minus) / 0,00."""
+    hours = round(hours, 2)
+    return fmt_hours(0) if not hours else ("+" if hours > 0 else "−") + fmt_hours(abs(hours))
+
+
 def fmt_percent(part: float, whole: float) -> str:
     """part's share of whole as a whole-number percentage, Finnish style
     with a non-breaking space ("52 %"). Blank when there's nothing to

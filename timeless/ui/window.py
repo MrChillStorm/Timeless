@@ -172,8 +172,14 @@ class MainWindow(QMainWindow):
     def open_settings(self) -> None:
         dialog = SettingsDialog(self, self.conn)
         dialog.appearanceChanged.connect(self.apply_theme)
-        dialog.changed.connect(lambda: self.week.load())
+        dialog.changed.connect(self._settings_changed)
         dialog.exec()
+
+    def _settings_changed(self) -> None:
+        # the full week and flex hours show in the week; flex hours can also add or remove a project and a kind
+        self.week.load()
+        if self.pages.currentIndex() != WEEK:
+            self.show_view(self.pages.currentIndex())
 
     def closeEvent(self, event) -> None:
         self.week.view.commit_editor()

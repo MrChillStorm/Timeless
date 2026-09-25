@@ -21,6 +21,11 @@ class P:
     COUNT = 13
 
 
+class K:
+    NAME, BILLING, FLEX, HOURS = range(4)
+    COUNT = 4
+
+
 class ProjectsModel(QAbstractTableModel):
     message = Signal(str)
     changed = Signal()
@@ -165,18 +170,26 @@ class KindsModel(QAbstractTableModel):
         return 0 if parent.isValid() else len(self.kinds)
 
     def columnCount(self, parent=QModelIndex()) -> int:
-        return 0 if parent.isValid() else 3
+        return 0 if parent.isValid() else K.COUNT
 
     def headerData(self, section, orientation, role=DISPLAY):
-        if orientation == H and role == DISPLAY:
-            return ("KIND", "BILLING", "HOURS")[section]
-        if orientation == H and role == ALIGN and section == 2:
+        if orientation != H:
+            return None
+        if role == DISPLAY:
+            return ("KIND", "BILLING", "FLEX", "HOURS")[section]
+        if role == ALIGN and section == K.HOURS:
             return RIGHT
+        if role == ALIGN and section == K.FLEX:
+            return int(Qt.AlignmentFlag.AlignCenter)
+        if role == TOOLTIP and section == K.FLEX:
+            return "Extra hours: hours of this kind go into your flex balance"
         return None
 
     def flags(self, index):
         f = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
-        return f | Qt.ItemFlag.ItemIsEditable if index.column() < 2 else f
+        if index.column() == K.FLEX:
+            return f | Qt.ItemFlag.ItemIsUserCheckable
+        return f | Qt.ItemFlag.ItemIsEditable if index.column() in (K.NAME, K.BILLING) else f
 
     def data(self, index, role=DISPLAY):
         if not index.isValid():
@@ -184,12 +197,14 @@ class KindsModel(QAbstractTableModel):
         k = self.kinds[index.row()]
         c = index.column()
         if role == KIND_ROLE:
-            return (Kind.TEXT, Kind.CHOICE, Kind.MUTED)[c]
+            return (Kind.TEXT, Kind.CHOICE, Kind.CHECK, Kind.MUTED)[c]
         if role == HEIGHT_ROLE:
             return 40
-        if c == 0 and role in (DISPLAY, EDIT):
+        if c == K.NAME and role in (DISPLAY, EDIT):
             return k.name
-        if c == 1:
+        if c == K.FLEX and role == CHECKED_ROLE:
+            return k.flex
+        if c == K.BILLING:
             if role == DISPLAY:
                 return store.BILLING[k.billing]
             if role == EDIT:
@@ -198,17 +213,19 @@ class KindsModel(QAbstractTableModel):
                 return [(label, key) for key, label in store.BILLING.items()]
             if role == TOOLTIP:
                 return "As project: billable when the project is. Or always billable / never billable."
-        if c == 2 and role == DISPLAY:
+        if c == K.HOURS and role == DISPLAY:
             return fmt_hours(self.booked.get(k.id, 0.0), blank_zero=True)
         return None
 
     def setData(self, index, value, role=EDIT) -> bool:
         k = self.kinds[index.row()]
-        if role != EDIT or not value:
+        if index.column() == K.FLEX and role == CHECKED_ROLE:
+            k.flex = bool(value)
+        elif role != EDIT or not value:
             return False
-        if index.column() == 0 and value != k.name:
+        elif index.column() == K.NAME and value != k.name:
             k.name = value
-        elif index.column() == 1 and value != k.billing:
+        elif index.column() == K.BILLING and value != k.billing:
             k.billing = value
         else:
             return False
@@ -218,7 +235,7 @@ class KindsModel(QAbstractTableModel):
             self.message.emit(str(exc))
             self.load()
             return False
-        self.dataChanged.emit(self.index(index.row(), 0), self.index(index.row(), 2))
+        self.dataChanged.emit(self.index(index.row(), 0), self.index(index.row(), K.COUNT - 1))
         self.changed.emit()
         return True
 
@@ -297,8 +314,8 @@ class ProjectsPage(QWidget):
         self.kind_view = GridView(return_edits=True)
         self.kind_view.setModel(self.kinds)
         kheader = self.kind_view.horizontalHeader()
-        kheader.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for col, width in ((1, 170), (2, 90)):
+        kheader.setSectionResizeMode(K.NAME, QHeaderView.ResizeMode.Stretch)
+        for col, width in ((K.BILLING, 170), (K.FLEX, 80), (K.HOURS, 90)):
             kheader.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
             kheader.resizeSection(col, width)
         klayout.addWidget(self.kind_view, 1)
@@ -318,6 +335,7 @@ class ProjectsPage(QWidget):
         self.notes.commit()
         self.projects.load()
         self.kinds.load()
+        self.kind_view.setColumnHidden(K.FLEX, not store.flex_enabled(self.conn))
         self._show_notes()
 
     def _show_notes(self) -> None:

@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from timeless.core import report
-from timeless.core.calendar import fmt_date, fmt_hours, fmt_percent, week_start
+from timeless.core import report, store
+from timeless.core.calendar import fmt_date, fmt_hours, fmt_percent, fmt_signed, week_start
 from timeless.core.db import get_setting, set_setting
 from timeless.ui import icons
 from timeless.ui.theme import colors
@@ -164,7 +164,12 @@ class ReportPage(QWidget):
                     item.setForeground(QColor(c["muted"]))
                 self.table.setItem(r, col, item)
         days = len({e.day for e in self.entries if e.hours})
-        self.summary.setText(f"{fmt_date(start)} – {fmt_date(end)}  ·  {fmt_hours(grand)} h on {days} day(s)"
+        flex = ""
+        if totals and store.flex_enabled(self.conn):
+            earned, used = store.flex_between(self.conn, start, end)
+            if earned or used:
+                flex = f"  ·  flex {fmt_signed(earned - used)} h ({fmt_hours(earned)} earned, {fmt_hours(used)} taken off)"
+        self.summary.setText(f"{fmt_date(start)} – {fmt_date(end)}  ·  {fmt_hours(grand)} h on {days} day(s)" + flex
                              if totals else "No hours in this range.")
         self.export_btn.setEnabled(bool(self.entries))
         self.refresh_icons()

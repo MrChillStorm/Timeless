@@ -91,6 +91,7 @@ def stylesheet(c: dict) -> str:
     QLabel {{ background: transparent; }}
     QLabel#title {{ font-size: 17px; font-weight: 600; }}
     QLabel#big {{ font-size: 22px; font-weight: 600; }}
+    QLabel#flex {{ font-size: 15px; font-weight: 600; }}
     QLabel#muted {{ color: {c['muted']}; }}
     QLabel#faint {{ color: {c['faint']}; }}
     QLabel#heading {{ font-size: 15px; font-weight: 600; }}

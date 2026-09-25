@@ -2,10 +2,10 @@
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QVBoxLayout,
+    QCheckBox, QComboBox, QDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextBrowser, QVBoxLayout,
 )
 
-from timeless.core import db
+from timeless.core import db, store
 from timeless.core.calendar import DEFAULT_FULL_WEEK
 from timeless.ui import theme
 from timeless.ui.widgets import HoursSpin
@@ -19,7 +19,7 @@ def _muted(text: str) -> QLabel:
 
 
 class SettingsDialog(QDialog):
-    changed = Signal()             # name or full week changed
+    changed = Signal()             # name, full week or day, or flex hours changed
     appearanceChanged = Signal()
 
     def __init__(self, parent, conn):
@@ -46,6 +46,11 @@ class SettingsDialog(QDialog):
         self.full_week.setFixedWidth(110)
         self.full_week.setValue(float(db.get_setting(conn, "full_week", str(DEFAULT_FULL_WEEK))))
         self.full_week.valueChanged.connect(self._save_full_week)
+        self.full_day = HoursSpin(maximum=24)
+        self.full_day.setSuffix(" h")
+        self.full_day.setFixedWidth(110)
+        self.full_day.setValue(store.full_day(conn))
+        self.full_day.valueChanged.connect(self._save_full_day)
         self.appearance = QComboBox()
         for key, label in theme.APPEARANCES.items():
             self.appearance.addItem(label, key)
@@ -57,6 +62,26 @@ class SettingsDialog(QDialog):
         week_row.addWidget(self.full_week)
         week_row.addWidget(_muted("Your full-time week. Holidays are taken out automatically."), 1)
         form.addRow("Full week", week_row)
+        day_row = QHBoxLayout()
+        day_row.addWidget(self.full_day)
+        day_row.addWidget(_muted("A normal working day. Flex hours only go on top of a full one."), 1)
+        form.addRow("Full day", day_row)
+        self.flex = QCheckBox("Keep a flex balance")
+        self.flex.setChecked(store.flex_enabled(conn))
+        self.flex.setToolTip(f"Adds a {store.FLEX_KIND} kind for extra hours and a {store.FLEX_PROJECT} project for "
+                             "time taken off,\nand shows the balance in the week. Turning it off keeps every hour.")
+        self.flex.toggled.connect(self._save_flex)
+        self.flex_start = HoursSpin(maximum=999, minimum=-999)
+        self.flex_start.setSuffix(" h")
+        self.flex_start.setFixedWidth(110)
+        self.flex_start.setValue(store.flex_start(conn))
+        self.flex_start.setEnabled(self.flex.isChecked())
+        self.flex_start.valueChanged.connect(self._save_flex_start)
+        flex_row = QHBoxLayout()
+        flex_row.addWidget(self.flex_start)
+        flex_row.addWidget(_muted("Starting balance: what you had before Timeless. Can be negative."), 1)
+        form.addRow("Flex hours", self.flex)
+        form.addRow("", flex_row)
         form.addRow("Appearance", self.appearance)
         layout.addLayout(form)
 
@@ -79,7 +104,23 @@ class SettingsDialog(QDialog):
         self.changed.emit()
 
     def _save_full_week(self, hours: float) -> None:
+        before = float(db.get_setting(self.conn, "full_week", str(DEFAULT_FULL_WEEK)))
         db.set_setting(self.conn, "full_week", str(round(hours, 2)))
+        if abs(self.full_day.value() - before / 5) < 0.005:  # the day has gone along with the week so far
+            self.full_day.setValue(round(hours / 5, 2))
+        self.changed.emit()
+
+    def _save_full_day(self, hours: float) -> None:
+        db.set_setting(self.conn, "full_day", str(round(hours, 2)))
+        self.changed.emit()
+
+    def _save_flex(self, on: bool) -> None:
+        store.set_flex(self.conn, on)
+        self.flex_start.setEnabled(on)
+        self.changed.emit()
+
+    def _save_flex_start(self, hours: float) -> None:
+        db.set_setting(self.conn, "flex_start", str(round(hours, 2)))
         self.changed.emit()
 
     def _save_appearance(self) -> None:
@@ -113,6 +154,10 @@ covers the rest.</p>
     <b>Of plan</b> turns amber when a project goes over.</li>
 <li>For all-hands, training and other internal time, make a project with no plan. Its hours count toward the
     week but have no plan to go over; write what it was in the day's note.</li>
+<li><b>Flex hours</b>: turn on <i>Keep a flex balance</i> in Settings. Extra hours go on a <b>Flex</b> row under
+    the project you worked them on (right-click it), once the day has a full day of other work (any time on a day
+    off); time you take off goes on <b>Flex time off</b>. The balance at the end of the week is next to the bar;
+    hover it for the details.</li>
 <li><b>Mark week done</b> once it's reported or invoiced: the week becomes read-only until you reopen it.</li>
 </ul>
 

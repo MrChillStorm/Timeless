@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 # "timeless" alone is taken on PyPI; the import package and the command are still `timeless`
 name = "timeless-timesheet"
-version = "1.1.0"
+version = "1.2.0"
 description = "A calm, personal timesheet: one week at a time, saved as you type."
 readme = "README.md"
 license = "MIT"

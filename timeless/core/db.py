@@ -17,6 +17,13 @@ DB_PATH = Path(os.environ["TIMELESS_DB"]) if os.environ.get("TIMELESS_DB") else 
 BACKUP_DIR = DB_PATH.parent / "backups"
 BACKUPS_KEPT = 30
 
+# Columns added after 1.0: schema.sql has them for new databases, and
+# connect() adds them to older ones.
+ADDED_COLUMNS = (
+    ("projects", "flex", "INTEGER NOT NULL DEFAULT 0"),
+    ("kinds", "flex", "INTEGER NOT NULL DEFAULT 0"),
+)
+
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
     path = Path(path) if path else DB_PATH
@@ -25,6 +32,9 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_PATH.read_text())
+    for table, column, definition in ADDED_COLUMNS:
+        if column not in {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     conn.commit()
     return conn
 

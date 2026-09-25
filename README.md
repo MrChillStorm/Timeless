@@ -4,7 +4,7 @@ A calm, personal timesheet. One week at a time: type the hours, write a
 line about the day, and see at a glance how the week sits against your
 plan and a full week. Nothing to save, nothing to submit.
 
-![Timeless: the week view, with the plan shown faintly in empty days, note dots, an on-call row, an unplanned meetings project and progress against plan](docs/screenshot.png)
+![Timeless: the week view, with the plan shown faintly in empty days, note dots, on-call and flex rows, an unplanned meetings project, the flex balance and progress against plan](docs/screenshot.png)
 
 Built with Python, PySide6 (Qt) and SQLite. Everything stays on your
 own computer.
@@ -82,6 +82,16 @@ arrows, by scrolling over the week, or from the calendar under it.
   plan counts every hour you entered: a meeting on top of a full plan
   shows there, and one that took time from a project shows on that
   project's row.
+- **Flex hours**, if your work has a flex balance (liukuma): turn on
+  *Keep a flex balance* in Settings and enter the balance you start
+  from. Extra hours go on a **Flex** row under the project you worked
+  them on (right-click the project), so they still count toward its
+  plan and billing. They only go on top of a full day: until the day
+  has a full day of other work (7,5 h unless you change it), Timeless
+  says so and keeps them out. On weekends and holidays every hour is
+  extra. Time you take off goes on the **Flex time off** project. The balance at the end of the week you're looking at sits
+  next to the bar, amber when it's negative; hover it for this week's
+  part. The Report shows what a date range earned and used.
 - **Mark week done** once it's reported or invoiced. The week becomes
   read-only until you reopen it.
 
@@ -90,7 +100,8 @@ client, billable, and the planned hours per weekday. The selected
 project's notes are in the bar under the table. Every change saves
 itself. Right-click to archive or delete; only a project that has never
 had hours can be deleted. Below the projects are your **kinds** of
-hours and how they bill.
+hours, how they bill and, with flex hours on, which ones go into the
+flex balance.
 
 **Report** shows hours per project for any date range (pick a quick
 range, or scroll the From and To dates a day at a time), with the
@@ -106,8 +117,9 @@ full week. That includes Easter Saturday, Midsummer Eve and Christmas
 Eve, which calendars print in black.
 
 **Settings** (⌘,) hold your name for exports, your full week (37,5 h by
-default) and the appearance: dark by default, or light, or following the
-system.
+default) and day (a fifth of the week until you set it), flex hours and
+the appearance: dark by default, or light, or
+following the system.
 
 ## Keys
 
@@ -126,8 +138,18 @@ system.
 
 ## Your data
 
-- It lives in `~/Library/Application Support/Timeless/timeless.db`,
-  outside this folder, so it can never end up in a git commit.
+- It's one file, `timeless.db`, in your system's usual place for app
+  data:
+
+  | System | Folder |
+  |---|---|
+  | macOS | `~/Library/Application Support/Timeless` |
+  | Windows | `C:\Users\<you>\AppData\Local\Timeless` |
+  | Linux | `~/.local/share/Timeless` (or `$XDG_DATA_HOME/Timeless`) |
+
+  That's outside the app's own folder, so it can never end up in a git
+  commit, and updating or reinstalling Timeless leaves it alone. Settings
+  shows the exact path, and **Open Data Folder** takes you there.
 - On the first launch of each day, a copy goes into `backups/` next to
   it. The last 30 days are kept. To restore one, quit the app and copy
   it over `timeless.db`.
@@ -138,7 +160,7 @@ system.
 
 ```bash
 pip install -e .                     # the `timeless` command, running this checkout
-python3 -m unittest discover tests   # core tests
+python3 -m unittest discover tests   # core and interface tests
 python3 packaging/build_icon.py      # rebuild the app icon after editing packaging/icon.svg
 ```
 
