@@ -86,7 +86,8 @@ def export_csv(path: Path, entries: list[Entry], person: str, fmt: str = "excel_
         return fmt_date(d) if finnish_dates else d.isoformat()
 
     with open(path, "w", newline="", encoding=encoding) as f:
-        writer = csv.writer(f, delimiter=delimiter)
+        # Quote every cell so notes may contain delimiters, quotes and newlines (RFC 4180).
+        writer = csv.writer(f, delimiter=delimiter, quoting=csv.QUOTE_ALL)
         writer.writerow(CSV_COLUMNS)
         for e in entries:
             writer.writerow([
