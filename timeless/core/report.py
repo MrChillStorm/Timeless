@@ -6,13 +6,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-from timeless.core.calendar import DAY_TITLES, fmt_date, fmt_hours, iso_week, week_start
+from timeless.core.calendar import DAY_TITLES, iso_week, week_start
 
-# key: (label, delimiter, decimal comma, Finnish dates, encoding)
-CSV_FORMATS = {
-    "excel_fi": ("Excel, Finnish (semicolons, 7,50, 27.9.2026)", ";", True, True, "utf-8-sig"),
-    "standard": ("Standard CSV (commas, 7.50, 2026-09-27)", ",", False, False, "utf-8"),
-}
 CSV_COLUMNS = ("Date", "Weekday", "Week", "Person", "Code", "Project", "Client", "Kind", "Billable", "Hours",
                "Note", "Week done")
 
@@ -79,20 +74,16 @@ def summarize(entries: list[Entry]) -> list[ProjectTotal]:
     return sorted(totals.values(), key=lambda t: t.project.lower())
 
 
-def export_csv(path: Path, entries: list[Entry], person: str, fmt: str = "excel_fi") -> None:
-    _label, delimiter, decimal_comma, finnish_dates, encoding = CSV_FORMATS[fmt]
-
-    def day(d: date) -> str:
-        return fmt_date(d) if finnish_dates else d.isoformat()
-
-    with open(path, "w", newline="", encoding=encoding) as f:
-        # Quote every cell so notes may contain delimiters, quotes and newlines (RFC 4180).
-        writer = csv.writer(f, delimiter=delimiter, quoting=csv.QUOTE_ALL)
+def export_csv(path: Path, entries: list[Entry], person: str) -> None:
+    """Standard CSV: commas, every cell quoted (RFC 4180), 7.50 and 2026-09-27. The BOM lets Excel
+    open it with a double click and read the UTF-8 right."""
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_ALL)
         writer.writerow(CSV_COLUMNS)
         for e in entries:
             writer.writerow([
-                day(e.day), DAY_TITLES[e.day.weekday()], iso_week(week_start(e.day)), person, e.code, e.project,
-                e.client, e.kind, "Yes" if e.billable else "No", fmt_hours(e.hours) if decimal_comma else f"{e.hours:.2f}",
+                e.day.isoformat(), DAY_TITLES[e.day.weekday()], iso_week(week_start(e.day)), person, e.code, e.project,
+                e.client, e.kind, "Yes" if e.billable else "No", f"{e.hours:.2f}",
                 e.note, "Yes" if e.done else "No",
             ])
 

@@ -206,12 +206,12 @@ class ReportTest(StoreCase):
         out = Path(self.tmp.name) / "out.csv"
         report.export_csv(out, entries, "Test User")
         with open(out, encoding="utf-8-sig", newline="") as f:
-            rows = list(csv.reader(f, delimiter=";"))
+            rows = list(csv.reader(f))
         self.assertEqual(rows[0][:4], ["Date", "Weekday", "Week", "Person"])
-        self.assertEqual(rows[1][:6], ["21.9.2026", "Monday", "2026-W39", "Test User", "TMP-001", "Alpha"])
-        self.assertEqual(rows[1][9:12], ["6,00", "Kickoff; prep", "Yes"])
+        self.assertEqual(rows[1][:6], ["2026-09-21", "Monday", "2026-W39", "Test User", "TMP-001", "Alpha"])
+        self.assertEqual(rows[1][9:12], ["6.00", "Kickoff; prep", "Yes"])
         with open(out, encoding="utf-8-sig", newline="") as f:
-            self.assertTrue(f.readline().startswith('"Date";"Weekday";"Week";"Person"'))
+            self.assertTrue(f.readline().startswith('"Date","Weekday","Week","Person"'))
 
     def test_daily_backup(self):
         backups = Path(self.tmp.name) / "backups"

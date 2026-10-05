@@ -106,9 +106,8 @@ flex balance.
 **Report** shows hours per project for any date range (pick a quick
 range, or scroll the From and To dates a day at a time), with the
 billable split, each project's share and its special kinds, and exports
-to CSV. The *Excel, Finnish* format (semicolons, `7,50`, `27.9.2026`)
-opens directly in Finnish Excel. There's also a standard comma/dot
-format.
+to a standard CSV (commas, every cell quoted, `7.50`, `2026-09-27`)
+that opens in Excel with a double click.
 
 **Finland.** Weeks are ISO weeks. In the calendar, Sundays and public
 holidays are red. Every holiday under the Annual Holidays Act

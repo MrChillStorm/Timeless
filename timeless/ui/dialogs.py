@@ -163,7 +163,7 @@ covers the rest.</p>
 
 <h3>Report</h3>
 <p>Hours per project for any date range (scroll the dates a day at a time), with the billable split and each
-project's share, and a CSV export. The <i>Excel, Finnish</i> format opens directly in Finnish Excel.</p>
+project's share, and a CSV export.</p>
 
 <h3>Keys</h3>
 <p>⌘1 / ⌘2 / ⌘3 Week, Projects, Report &nbsp;·&nbsp; ⌘[ / ⌘] previous / next week &nbsp;·&nbsp; ⌘T this week

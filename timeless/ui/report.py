@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
+    QAbstractItemView, QFileDialog, QFrame, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -98,17 +98,11 @@ class ReportPage(QWidget):
         foot.setContentsMargins(16, 10, 16, 10)
         self.summary = QLabel()
         self.summary.setObjectName("muted")
-        self.fmt = QComboBox()
-        for key, (label, *_rest) in report.CSV_FORMATS.items():
-            self.fmt.addItem(label, key)
-        self.fmt.setCurrentIndex(max(0, self.fmt.findData(get_setting(conn, "csv_format", "excel_fi"))))
-        self.fmt.currentIndexChanged.connect(lambda _i: set_setting(conn, "csv_format", self.fmt.currentData()))
         self.export_btn = QPushButton("Export CSV…")
         self.export_btn.setProperty("primary", True)
         self.export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.export_btn.clicked.connect(self.export)
         foot.addWidget(self.summary, 1)
-        foot.addWidget(self.fmt)
         foot.addWidget(self.export_btn)
         layout.addWidget(bottom)
         self.presets.set_current(2)
@@ -182,7 +176,7 @@ class ReportPage(QWidget):
         if not path:
             return
         try:
-            report.export_csv(Path(path), self.entries, person, self.fmt.currentData())
+            report.export_csv(Path(path), self.entries, person)
         except OSError as exc:
             QMessageBox.warning(self, "Export", f"Couldn't write the file:\n\n{exc}")
             return
